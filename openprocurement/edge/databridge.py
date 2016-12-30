@@ -33,7 +33,7 @@ from .workers import ResourceItemWorker
 logger = logging.getLogger(__name__)
 
 defaults_workers = {
-    'resourse': 'tenders',
+    'resource': 'tenders',
     'client_inc_step_timeout': 0.1,
     'client_dec_step_timeout': 0.02,
     'drop_threshold_client_cookies': 2,
@@ -52,7 +52,7 @@ defaults = {
     'watch_interval': 10,
     'user_agent': 'edge_' + defaults_workers['resource'] + '.client',
     'couch_url': 'http://127.0.0.1:5984',
-    'public_db': 'edge_db',
+    'db_name': 'edge_db',
     'logs_db': 'logs_db',
     'resource_items_limit': 100,
     'resource_items_queue_size': 102,
