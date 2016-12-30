@@ -32,30 +32,36 @@ from .workers import ResourceItemWorker
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_QUEUE_TIMEOUT = 3
-DEFAULT_WORKERS_MIN = 1
-DEFAULT_WORKERS_MAX = 3
-DEFAULT_RETRY_WORKERS_MIN = 1
-DEFAULT_RETRY_WORKERS_MAX = 2
-DEFAULT_FILTER_WORKERS_COUNT = 1
-DEFAULT_RETRY_TIMEOUT = 5
-DEFAULT_WORKERS_SLEEP = 5
-DEFAULT_WATCH_INTERVAL = 10
-DEFAULT_RETRIES_COUNT = 10
-DEFAULT_RESOURCE = 'tenders'
-DEFAULT_USER_AGENT = 'edge_' + DEFAULT_RESOURCE + '.client'
-DEFAULT_COUCHDB_URL = 'http://127.0.0.1:5984'
-DEFAULT_COUCHDB_NAME = 'edge_db'
-DEFAULT_LOGDB_NAME = 'logs_db'
-DEFAULT_RESOURCE_ITEMS_LIMIT = 100
-DEFAULT_RESOURCE_ITEMS_QUEUE_SIZE = 102
-DEFAULT_RETRY_RESOURCE_ITEMS_QUEUE_SIZE = -1
-DEFAULT_WORKERS_INC_THRESHOLD = 90
-DEFAULT_WORKERS_DEC_THRESHOLD = 30
-DEFAULT_CLIENT_INC_STEP_TIMEOUT = 0.1
-DEFAULT_CLIENT_DEC_STEP_TIMEOUT = 0.02
-DEFAULT_DROP_THRESHOLD_CLIENT_COOKIES = 2
-DEFAULT_QUEUES_CONTROLLER_TIMEOUT = 60
+defaults_workers = {
+    'resourse': 'tenders',
+    'client_inc_step_timeout': 0.1,
+    'client_dec_step_timeout': 0.02,
+    'drop_threshold_client_cookies': 2,
+    'worker_sleep': 5,
+    'retry_default_timeout': 5,
+    'retries_count': 10,
+    'queue_timeout': 3,
+}
+
+defaults = {
+    'workers_min': 1,
+    'workers_max': 3,
+    'retry_workers_min': 1,
+    'retry_workers_max': 2,
+    'filter_workers_count': 1,
+    'watch_interval': 10,
+    'user_agent': 'edge_' + defaults_workers['resource'] + '.client',
+    'couch_url': 'http://127.0.0.1:5984',
+    'public_db': 'edge_db',
+    'logs_db': 'logs_db',
+    'resource_items_limit': 100,
+    'resource_items_queue_size': 102,
+    'retry_resource_items_queue_size': -1,
+    'workers_inc_threshold': 90,
+    'workers_dec_threshold': 30,
+    'queues_controller_timeout': 60
+}
+
 
 
 class DataBridgeConfigError(Exception):
@@ -75,37 +81,15 @@ class EdgeDataBridge(object):
         self.api_version = self.config_get('resources_api_version')
         self.retrievers_params = self.config_get('retrievers_params')
 
+        #config init
+        for key in defaults:
+            setattr(self,key, self.config_get(key) or defaults[key])
         # Workers settings
-        self.workers_config['resource'] = self.config_get('resource') or DEFAULT_RESOURCE
-        self.workers_config['client_inc_step_timeout'] = self.config_get('client_inc_step_timeout') or DEFAULT_CLIENT_INC_STEP_TIMEOUT
-        self.workers_config['client_dec_step_timeout'] = self.config_get('client_dec_step_timeout') or DEFAULT_CLIENT_DEC_STEP_TIMEOUT
-        self.workers_config['drop_threshold_client_cookies'] = self.config_get('drop_threshold_client_cookies') or DEFAULT_DROP_THRESHOLD_CLIENT_COOKIES
-        self.workers_config['worker_sleep'] = self.config_get('worker_sleep') or DEFAULT_WORKERS_SLEEP
-        self.workers_config['retry_default_timeout'] = self.config_get('retry_default_timeout') or DEFAULT_RETRY_TIMEOUT
-        self.workers_config['retries_count'] = self.config_get('retries_count') or DEFAULT_RETRIES_COUNT
-        self.workers_config['queue_timeout'] = self.config_get('queue_timeout') or DEFAULT_QUEUE_TIMEOUT
+        for key in defaults_workers:
+            self.workers_config[key] = self.config_get(key) or defaults_workers[key]
 
-        self.workers_inc_threshold = self.config_get('workers_inc_threshold') or DEFAULT_WORKERS_INC_THRESHOLD
-        self.workers_dec_threshold = self.config_get('workers_dec_threshold') or DEFAULT_WORKERS_DEC_THRESHOLD
-        self.workers_min = self.config_get('workers_min') or DEFAULT_WORKERS_MIN
-        self.workers_max = self.config_get('workers_max') or DEFAULT_WORKERS_MAX
         self.workers_pool = gevent.pool.Pool(self.workers_max)
-
-        # Retry workers settings
-        self.retry_workers_min = self.config_get('retry_workers_min') or DEFAULT_RETRY_WORKERS_MIN
-        self.retry_workers_max = self.config_get('retry_workers_max') or DEFAULT_RETRY_WORKERS_MAX
         self.retry_workers_pool = gevent.pool.Pool(self.retry_workers_max)
-
-        self.retry_resource_items_queue_size = self.config_get('retry_resource_items_queue_size') or DEFAULT_RETRY_RESOURCE_ITEMS_QUEUE_SIZE
-
-        self.filter_workers_count = self.config_get('filter_workers_count') or DEFAULT_FILTER_WORKERS_COUNT
-        self.watch_interval = self.config_get('watch_interval') or DEFAULT_WATCH_INTERVAL
-        self.user_agent = self.config_get('user_agent') or DEFAULT_USER_AGENT
-        self.log_db_name = self.config_get('logs_db') or DEFAULT_LOGDB_NAME
-        self.resource_items_queue_size = self.config_get('resource_items_queue_size') or DEFAULT_RESOURCE_ITEMS_QUEUE_SIZE
-        self.resource_items_limit = self.config_get('resource_items_limit') or DEFAULT_RESOURCE_ITEMS_LIMIT
-        self.queues_controller_timeout = self.config_get('queues_controller_timeout') or DEFAULT_QUEUES_CONTROLLER_TIMEOUT
-
         self.filter_workers_pool = gevent.pool.Pool(self.filter_workers_count)
         if self.resource_items_queue_size == -1:
             self.resource_items_queue = Queue()
@@ -120,15 +104,11 @@ class EdgeDataBridge(object):
         self.process = psutil.Process(os.getpid())
 
         # Variables for statistic
-        self.log_dict['not_actual_docs_count'] = 0
-        self.log_dict['update_documents'] = 0
-        self.log_dict['save_documents'] = 0
-        self.log_dict['add_to_retry'] = 0
-        self.log_dict['droped'] = 0
-        self.log_dict['skiped'] = 0
-        self.log_dict['add_to_resource_items_queue'] = 0
-        self.log_dict['exceptions_count'] = 0
-        self.log_dict['not_found_count'] = 0
+        for key in ('not_actual_docs_count', 'update_documents', 'save_documents',
+                    'add_to_retry', 'droped', 'skiped',
+                    'add_to_resource_items_queue',
+                    'exceptions_count', 'not_found_count'):
+            self.log_dict[key] = 0
 
         if self.api_host != '' and self.api_host is not None:
             api_host = urlparse(self.api_host)
@@ -138,9 +118,6 @@ class EdgeDataBridge(object):
         else:
             raise DataBridgeConfigError('In config dictionary empty or missing'
                                         ' \'tenders_api_server\'')
-
-        self.couch_url = self.config_get('couch_url') or DEFAULT_COUCHDB_URL
-        self.db_name = self.config_get('public_db') or DEFAULT_COUCHDB_NAME
 
         server = Server(self.couch_url, session=Session(retry_delays=range(10)))
 
